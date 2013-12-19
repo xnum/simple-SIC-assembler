@@ -114,19 +114,27 @@ int main(int argc, char *argv[])
    
    //  after pass 1
    //  symbol address and all location record at SYMTAB and LOCTAB
-	
-    if( src.code[0].ins == "START" )
-	{
-		
-		
-	}
+   putchar('H');
+   printf("%-6s", src.code[0].label.c_str());
+   printf("%06X", LOCTAB[0]);
+   printf("%06X", _LOCCTR-LOCTAB[0]);
+   putchar('\n');
+
 
 	vector<int> object;
 	object.push_back( 0 );
 	
 	i = 1;
+    int code_length = 0;
+    string buffer;
 	while( src.code[i].ins != "END" )
 	{
+        if( code_length == 0 )
+        {
+            putchar('T');
+            printf( "%06X", LOCTAB[i] );
+            buffer = "";
+        }
 		int result = sic_ins_set.getInsByte( src.code[i].ins );
 		if( result != 0 )
 		{
@@ -146,10 +154,14 @@ int main(int argc, char *argv[])
             }
             else
 			{
-				cout << "unable to find symbol: ins=" << src.code[i].ins << " val=" << src.code[i].value << endl;
+				//cout << "unable to find symbol: ins=" << src.code[i].ins << " val=" << src.code[i].value << endl;
 			}
 			bytecode |= address;
-			object.push_back( bytecode );
+            char out[10] = {};
+            sprintf( out , "%06X" , bytecode );
+            buffer += out;
+            code_length += ( LOCTAB[i+1]-LOCTAB[i] );
+			//object.push_back( bytecode );
 		}
 		else if( src.code[i].ins == "BYTE" )
 		{
@@ -161,31 +173,56 @@ int main(int argc, char *argv[])
 					istringstream iss( str );
 					char n = 0;
 					int sum = 0;
+                    int cl = 0;
 					while( iss.get(n) )
+                    {
+                        cl++;
                         sum = (sum << 8) + n;
-					object.push_back( sum );
-						
-				}
+                    }
+					//object.push_back( sum );
+					string format = "%0";
+                    format += cl*2+'0';
+                    format += "X";	
+                    char out[10] = {};
+                    sprintf( out , format.c_str() , sum );
+                    buffer += out;
+                    code_length += cl;
+                }
 				if( src.code[i].value[0] == 'X' )
 				{
 					istringstream iss( str );
 					int _n;
 					iss >> hex >> _n;
-					object.push_back( _n );
+                    
+                    char out[10] = {};
+                    sprintf( out , "%02X" , _n );
+                    buffer += out;
+                    code_length += 1;
 				}
 			}
 		}
 		else if( src.code[i].ins == "RESB" )
 		{
-			object.push_back( 0 );
+            code_length += ( LOCTAB[i+1]-LOCTAB[i] );
+			//object.push_back( 0 );
 		}
 		else if( src.code[i].ins == "WORD" )
 		{
-			object.push_back( 0 );
+		    string str = src.code[i].value;
+            istringstream iss( str );
+            int n;
+            iss >> n;
+            char out[10] = {};
+            sprintf( out , "%03X" , n );
+            buffer += out;
+            code_length += ( LOCTAB[i+1]-LOCTAB[i] );
+            //object.push_back(n);
 		}
 		else if( src.code[i].ins == "RESW" )
 		{
-			object.push_back( 0 );
+            buffer += "000";
+			//object.push_back( 0 );
+            code_length += ( LOCTAB[i+1]-LOCTAB[i] );
 		}
 		else
 		{
@@ -193,10 +230,23 @@ int main(int argc, char *argv[])
 			object.push_back( 0 );
 		}
 		
+		if( code_length+3 > 30 )
+        {
+           printf("%02X%s\n" , code_length , buffer.c_str() );
+           buffer = "";
+           code_length = 0;
+        }
+		
 		++i;
 	}
+	
+    printf("%02X%s\n" , code_length , buffer.c_str() );
+    buffer = "";
+    code_length = 0;
+     putchar('E');
+     printf("%06X", LOCTAB[0]);
+     putchar('\n');
      
-
      /* for check after pass 2
     for( size_t i = 0 ; i < LOCTAB.size() ; ++i )
     {
@@ -207,6 +257,6 @@ int main(int argc, char *argv[])
         printf("%06x\n",object[i]);
     }
     */
-
+     
     return 0;
 }
