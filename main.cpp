@@ -1,6 +1,4 @@
 #include <iostream>
-#include <map>
-#include <vector>
 #include "input.h"
 #include "ins_set.h"
 
@@ -10,43 +8,44 @@ const int MAX_LEN = 200;
 
 int main(int argc, char *argv[])
 {
-	ins_set sic_ins_set;
-    Minput src("code.txt");
-
-    int LOCTAB[ MAX_LEN ] = {};
-    string SYMTAB_SYM[ MAX_LEN ];
-    int    SYMTAB_LOC[ MAX_LEN ];
+	ins_set sic_ins_set;            /*初始化SIC指令集資料*/
+    Minput src("code.txt");         /*初始化原始碼資料*/
+    int LOCTAB[ MAX_LEN ] = {};     /*初始化程式碼位址紀錄表格*/
+    string SYMTAB_SYM[ MAX_LEN ];   /*初始化符號位址紀錄表格(符號名稱)*/
+    int    SYMTAB_LOC[ MAX_LEN ];   /*初始化符號位址紀錄表格(符號位址)*/
+    int LOCTAB_top = 0;             /*程式碼位址紀錄表格指標*/
+    int SYMTAB_top = 0;             /*符號位址紀錄表格指標*/
+    int LOCCTR = 0;                 /*紀錄PASS1處理的程式碼目前地址*/
     
-    int LOCTAB_top = 0;
-    int SYMTAB_top = 0;
-    
-    int LOCCTR = 0;
-
-    if( true != src.getCode() )
+    if( true != src.getCode() )     /*如果無法取得原始碼*/
     {
         cout << "unable to open file" << endl; 
         return 0x1; 
     }
 
+    /*如果第1行是START就依照他給的位址來當START ADDRESS*/
     if( src.code[0].ins == "START" )
     {
-        istringstream iss( src.code[0].value );
-        iss >> hex >> LOCCTR;
+        istringstream iss( src.code[0].value ); /*先把數值放進字串流內*/
+        iss >> hex >> LOCCTR;  /*因為原始內容是HEX 要用HEX的方式讀取資料*/
     }
     
-    LOCTAB[ LOCTAB_top++ ] = LOCCTR;
-    int _top = 1;
+    LOCTAB[ LOCTAB_top++ ] = LOCCTR; /*寫入表格內*/
+    
+    int _top = 1; // 原始碼行數指標
     while( src.code[_top].ins != "END" )
     {
-        // label process
+        // LABEL段處理程式碼 
         if( src.code[_top].label != "" )
         {
-            int ptr = SYMTAB_top;
+            int ptr = SYMTAB_top; // set pointer to end of SYMTAB
             for( int index = 0 ; index < SYMTAB_top ; ++index )
             {
                 if( SYMTAB_SYM[ index ] == src.code[_top].label )
                     ptr = index; 
             }
+            
+            // if found data already in SYMTAB , pointer will point the label index
             if( ptr != SYMTAB_top )
             {
                 cout << "Error: Symbol " << src.code[_top].label << " already decleared" << endl; 
@@ -54,37 +53,48 @@ int main(int argc, char *argv[])
             }
             else
             {
+                // if not found , put data to SYMTAB and increase SYMTAB_top
                 SYMTAB_SYM[ SYMTAB_top ] = src.code[_top].label; 
                 SYMTAB_LOC[ SYMTAB_top ] = LOCCTR; 
                 SYMTAB_top++;
             }
         }
-        // end label process
+        // END LABEL PROCESS CODE
     
+        // write location to location table
         LOCTAB[ LOCTAB_top++ ] = LOCCTR;
+        
         // op code process
+        // search if the instruction of this line is available
 		int result = sic_ins_set.getInsByte( src.code[_top].ins );
         
+        // not equal zero means the instruction is available and result shows its byte format
 		if( result != 0 )
         {
+            // add to LOCCTR , locate code address
             LOCCTR += result; 
-            if( result == 3 && src.code[_top].extra != "" )
-                LOCCTR++;
+            
         }
         else if( src.code[_top].ins == "WORD" )
         {
+            // word == 3 bytes
             LOCCTR += 3;
         }
         else if( src.code[_top].ins == "RESW" )
         {
+            // value is the reserve words number
+            // use atoi to convert string to number
             LOCCTR += 3 * atoi( src.code[_top].value.c_str() );
         }
         else if( src.code[_top].ins == "RESB" )
         {
+            // same operation but is bytes there
             LOCCTR += atoi( src.code[_top].value.c_str() );
         }
         else if( src.code[_top].ins == "BYTE" )
         {
+            // contant bytes
+            // only calculate the length there
             string str = src.code[_top].value;
             if( str[1] == '\'' )
             {
@@ -109,6 +119,7 @@ int main(int argc, char *argv[])
         }
         else
         {
+            // bad opcode
             cout << "Error: invalid op code " 
                  << src.code[_top].label 
                  << src.code[_top].ins 
@@ -125,6 +136,8 @@ int main(int argc, char *argv[])
     
    //  after pass 1
    //  symbol address and all location record at SYMTAB and LOCTAB
+   
+   // write header record first
    putchar('H');
    printf("%-6s", src.code[0].label.c_str());
    printf("%06X", LOCTAB[0]);
@@ -132,6 +145,7 @@ int main(int argc, char *argv[])
    putchar('\n');
 
 
+   // do PASS2 and write out text record
 	_top = 1;
     int code_length = 0;
     string buffer;
@@ -139,18 +153,24 @@ int main(int argc, char *argv[])
 	{
         if( code_length == 0 )
         {
+            // open a new line and write its first instrction's address
             putchar('T');
             printf( "%06X", LOCTAB[_top] );
             buffer = "";
         }
+        
+        // find ins's byte format and its opcode
 		int result = sic_ins_set.getInsByte( src.code[_top].ins );
 		if( result != 0 )
 		{
+            // convert value( if is symbol ) to its address
             string symbol = src.code[_top].value;
+            // symbol is our value and , split the regster ex: BUFFER,X
             replace( symbol.begin() , symbol.end() , ',' , '\n' );
             string ex;
             istringstream iss( symbol );
             iss >> symbol >> ex;
+            // ex get regster if have
 			int bytecode = (sic_ins_set.getInsformat( src.code[_top].ins ));
             int address = 0;
             
@@ -173,13 +193,17 @@ int main(int argc, char *argv[])
 			bytecode |= address;
             char out[10] = {};
             sprintf( out , "%06X" , bytecode );
+            // write object code to buffer 
             buffer += out;
+            // add code length 
             code_length += ( LOCTAB[_top+1]-LOCTAB[_top] );
 		}
 		else if( src.code[_top].ins == "BYTE" )
 		{
+            // [1] must be ' and [0] is C or X
 			if( src.code[_top].value[1] == '\'' )
 			{
+                // get substring from [2] to end
 				string str( src.code[_top].value.begin()+2 , src.code[_top].value.end()-1 );
 				if( src.code[_top].value[0] == 'C' )
 				{
@@ -215,10 +239,12 @@ int main(int argc, char *argv[])
 		}
 		else if( src.code[_top].ins == "RESB" )
 		{
+            // code must be zeros so just add code length and do nothing
             code_length += ( LOCTAB[_top+1]-LOCTAB[_top] );
 		}
 		else if( src.code[_top].ins == "WORD" )
 		{
+            // same as byte but multi 3
 		    string str = src.code[_top].value;
             istringstream iss( str );
             int n;
@@ -230,6 +256,7 @@ int main(int argc, char *argv[])
 		}
 		else if( src.code[_top].ins == "RESW" )
 		{
+            // likes RESB , sub LOCTAB to get length
             code_length += ( LOCTAB[_top+1]-LOCTAB[_top] );
 		}
 		else
@@ -238,6 +265,7 @@ int main(int argc, char *argv[])
             return 0x5;
 		}
 		
+		// when buffer is more than 30 if write in a 3 byte format , so we print it to file
 		if( code_length+3 > 30 )
         {
            printf("%02X%s\n" , buffer.size()/2 , buffer.c_str() );
@@ -248,6 +276,7 @@ int main(int argc, char *argv[])
 		++_top;
 	}
 	
+	// write end record
     printf("%02X%s\n" , code_length , buffer.c_str() );
     buffer = "";
     code_length = 0;
