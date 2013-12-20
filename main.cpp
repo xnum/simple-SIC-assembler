@@ -6,73 +6,86 @@
 
 using namespace std;
 
+const int MAX_LEN = 200;
+
 int main(int argc, char *argv[])
 {
 	ins_set sic_ins_set;
     Minput src("code.txt");
 
-    vector<int> LOCTAB;
-    int _LOCCTR = 0;
-    map<string ,int> SYMTAB;
+    int LOCTAB[ MAX_LEN ] = {};
+    string SYMTAB_SYM[ MAX_LEN ];
+    int    SYMTAB_LOC[ MAX_LEN ];
     
-    int ERR_FLAG = 0;
+    int LOCTAB_top = 0;
+    int SYMTAB_top = 0;
+    
+    int LOCCTR = 0;
 
     if( true != src.getCode() )
     {
         cout << "unable to open file" << endl; 
-        return -1; 
+        return 0x1; 
     }
 
     if( src.code[0].ins == "START" )
     {
         istringstream iss( src.code[0].value );
-        iss >> hex >> _LOCCTR ;
+        iss >> hex >> LOCCTR;
     }
-    LOCTAB.push_back( _LOCCTR );
-    int i = 1;
-    while( src.code[i].ins != "END" )
+    
+    LOCTAB[ LOCTAB_top++ ] = LOCCTR;
+    int _top = 1;
+    while( src.code[_top].ins != "END" )
     {
         // label process
-        if( src.code[i].label != "" )
+        if( src.code[_top].label != "" )
         {
-            map<string ,int>::iterator it = SYMTAB.find( src.code[i].label ); 
-            if( it != SYMTAB.end() )
+            int ptr = SYMTAB_top;
+            for( int index = 0 ; index < SYMTAB_top ; ++index )
             {
-                cout << "Symbol " << src.code[i].label << "already decleared" << endl; 
-                ERR_FLAG |= 0x1;
+                if( SYMTAB_SYM[ index ] == src.code[_top].label )
+                    ptr = index; 
+            }
+            if( ptr != SYMTAB_top )
+            {
+                cout << "Error: Symbol " << src.code[_top].label << " already decleared" << endl; 
+                return 0x2;
             }
             else
             {
-                SYMTAB[ src.code[i].label ] = _LOCCTR; 
+                SYMTAB_SYM[ SYMTAB_top ] = src.code[_top].label; 
+                SYMTAB_LOC[ SYMTAB_top ] = LOCCTR; 
+                SYMTAB_top++;
             }
         }
         // end label process
     
-        LOCTAB.push_back( _LOCCTR );
+        LOCTAB[ LOCTAB_top++ ] = LOCCTR;
         // op code process
-		int result = sic_ins_set.getInsByte( src.code[i].ins );
+		int result = sic_ins_set.getInsByte( src.code[_top].ins );
         
 		if( result != 0 )
         {
-            _LOCCTR += result; 
-            if( result == 3 && src.code[i].extra != "" )
-                _LOCCTR++;
+            LOCCTR += result; 
+            if( result == 3 && src.code[_top].extra != "" )
+                LOCCTR++;
         }
-        else if( src.code[i].ins == "WORD" )
+        else if( src.code[_top].ins == "WORD" )
         {
-            _LOCCTR += 3;
+            LOCCTR += 3;
         }
-        else if( src.code[i].ins == "RESW" )
+        else if( src.code[_top].ins == "RESW" )
         {
-            _LOCCTR += 3 * atoi( src.code[i].value.c_str() );
+            LOCCTR += 3 * atoi( src.code[_top].value.c_str() );
         }
-        else if( src.code[i].ins == "RESB" )
+        else if( src.code[_top].ins == "RESB" )
         {
-            _LOCCTR += atoi( src.code[i].value.c_str() );
+            LOCCTR += atoi( src.code[_top].value.c_str() );
         }
-        else if( src.code[i].ins == "BYTE" )
+        else if( src.code[_top].ins == "BYTE" )
         {
-            string str = src.code[i].value;
+            string str = src.code[_top].value;
             if( str[1] == '\'' )
             {
                 replace( str.begin() , str.end() , '\'' , '\n' );
@@ -83,92 +96,92 @@ int main(int argc, char *argv[])
                 if( c == 'X' || c == 'x' )
                 {
                     double leng = tok.size() / 2;
-                    _LOCCTR += int(leng+0.5);
+                    LOCCTR += int(leng+0.5);
                 }
                 else if( c == 'C' || c == 'c' )
                 {
-                   _LOCCTR += tok.size(); 
+                   LOCCTR += tok.size(); 
                 }
             
             }
             else
-                _LOCCTR += 1; 
+                LOCCTR += 1; 
         }
         else
         {
-            cout << "invalid op code " << src.code[i].label << src.code[i].ins << "." <<src.code[i].value << src.code[i].extra << endl;
-            ERR_FLAG |= 0x2; 
+            cout << "Error: invalid op code " 
+                 << src.code[_top].label 
+                 << src.code[_top].ins 
+                 << src.code[_top].value
+                 << src.code[_top].extra 
+                 << endl;
+                 
+            return 0x3;
         }
         //end op code process
         
-        ++i;
+        ++_top;
     }
     
-    /* check 
-    for( int i = 0 ; i < src.code.size() ; ++i )
-        cout << hex << LOCTAB[i] << "\t" << src.code[i].label << "\t" << src.code[i].ins << "\t" << src.code[i].value << "\t" << src.code[i].extra << endl;
-    cout << hex << "total length = " << _LOCCTR-LOCTAB[0] << endl;
-    */
-    
-     
-   
    //  after pass 1
    //  symbol address and all location record at SYMTAB and LOCTAB
    putchar('H');
    printf("%-6s", src.code[0].label.c_str());
    printf("%06X", LOCTAB[0]);
-   printf("%06X", _LOCCTR-LOCTAB[0]);
+   printf("%06X", LOCCTR-LOCTAB[0]);
    putchar('\n');
 
 
-	vector<int> object;
-	object.push_back( 0 );
-	
-	i = 1;
+	_top = 1;
     int code_length = 0;
     string buffer;
-	while( src.code[i].ins != "END" )
+	while( src.code[_top].ins != "END" )
 	{
         if( code_length == 0 )
         {
             putchar('T');
-            printf( "%06X", LOCTAB[i] );
+            printf( "%06X", LOCTAB[_top] );
             buffer = "";
         }
-		int result = sic_ins_set.getInsByte( src.code[i].ins );
+		int result = sic_ins_set.getInsByte( src.code[_top].ins );
 		if( result != 0 )
 		{
-            string symbol = src.code[i].value;
+            string symbol = src.code[_top].value;
             replace( symbol.begin() , symbol.end() , ',' , '\n' );
             string ex;
             istringstream iss( symbol );
             iss >> symbol >> ex;
-            map<string ,int>::iterator it = SYMTAB.find( symbol ); 
-			int bytecode = (sic_ins_set.getInsformat( src.code[i].ins ));
+			int bytecode = (sic_ins_set.getInsformat( src.code[_top].ins ));
             int address = 0;
-            if( it != SYMTAB.end() )
+            
+            int ptr = SYMTAB_top;
+            for( int index = 0 ; index < SYMTAB_top ; ++index )
+                if( SYMTAB_SYM[index] == symbol )
+                    ptr = index;
+            if( ptr != SYMTAB_top )
             {
-                address = SYMTAB[ symbol ]; 
+                address = SYMTAB_LOC[ ptr ]; 
                 if( ex == "X" || ex == "x" )
                     address |= 1 << 15; 
             }
-            else
+            else if( symbol != "" )
 			{
-				//cout << "unable to find symbol: ins=" << src.code[i].ins << " val=" << src.code[i].value << endl;
+				cout << "Error: unable to find symbol: ins=" << src.code[_top].ins << " val=" << src.code[_top].value << endl;
+                return 0x4;
 			}
+			
 			bytecode |= address;
             char out[10] = {};
             sprintf( out , "%06X" , bytecode );
             buffer += out;
-            code_length += ( LOCTAB[i+1]-LOCTAB[i] );
-			//object.push_back( bytecode );
+            code_length += ( LOCTAB[_top+1]-LOCTAB[_top] );
 		}
-		else if( src.code[i].ins == "BYTE" )
+		else if( src.code[_top].ins == "BYTE" )
 		{
-			if( src.code[i].value[1] == '\'' )
+			if( src.code[_top].value[1] == '\'' )
 			{
-				string str( src.code[i].value.begin()+2 , src.code[i].value.end()-1 );
-				if( src.code[i].value[0] == 'C' )
+				string str( src.code[_top].value.begin()+2 , src.code[_top].value.end()-1 );
+				if( src.code[_top].value[0] == 'C' )
 				{
 					istringstream iss( str );
 					char n = 0;
@@ -179,7 +192,6 @@ int main(int argc, char *argv[])
                         cl++;
                         sum = (sum << 8) + n;
                     }
-					//object.push_back( sum );
 					string format = "%0";
                     format += cl*2+'0';
                     format += "X";	
@@ -188,7 +200,7 @@ int main(int argc, char *argv[])
                     buffer += out;
                     code_length += cl;
                 }
-				if( src.code[i].value[0] == 'X' )
+				if( src.code[_top].value[0] == 'X' )
 				{
 					istringstream iss( str );
 					int _n;
@@ -201,62 +213,48 @@ int main(int argc, char *argv[])
 				}
 			}
 		}
-		else if( src.code[i].ins == "RESB" )
+		else if( src.code[_top].ins == "RESB" )
 		{
-            code_length += ( LOCTAB[i+1]-LOCTAB[i] );
-			//object.push_back( 0 );
+            code_length += ( LOCTAB[_top+1]-LOCTAB[_top] );
 		}
-		else if( src.code[i].ins == "WORD" )
+		else if( src.code[_top].ins == "WORD" )
 		{
-		    string str = src.code[i].value;
+		    string str = src.code[_top].value;
             istringstream iss( str );
             int n;
             iss >> n;
             char out[10] = {};
-            sprintf( out , "%03X" , n );
+            sprintf( out , "%06X" , n );
             buffer += out;
-            code_length += ( LOCTAB[i+1]-LOCTAB[i] );
-            //object.push_back(n);
+            code_length += ( LOCTAB[_top+1]-LOCTAB[_top] );
 		}
-		else if( src.code[i].ins == "RESW" )
+		else if( src.code[_top].ins == "RESW" )
 		{
-            buffer += "000";
-			//object.push_back( 0 );
-            code_length += ( LOCTAB[i+1]-LOCTAB[i] );
+            code_length += ( LOCTAB[_top+1]-LOCTAB[_top] );
 		}
 		else
 		{
-			cout << "don't find ins: " << src.code[i].ins << endl;
-			object.push_back( 0 );
+			cout << "Error: don't find ins: " << src.code[_top].ins << endl;
+            return 0x5;
 		}
 		
 		if( code_length+3 > 30 )
         {
-           printf("%02X%s\n" , code_length , buffer.c_str() );
+           printf("%02X%s\n" , buffer.size()/2 , buffer.c_str() );
            buffer = "";
            code_length = 0;
         }
 		
-		++i;
+		++_top;
 	}
 	
     printf("%02X%s\n" , code_length , buffer.c_str() );
     buffer = "";
     code_length = 0;
-     putchar('E');
-     printf("%06X", LOCTAB[0]);
-     putchar('\n');
+    putchar('E');
+    printf("%06X", LOCTAB[0]);
+    putchar('\n');
      
-     /* for check after pass 2
-    for( size_t i = 0 ; i < LOCTAB.size() ; ++i )
-    {
-        cout << hex << LOCTAB[i] << "\t" << dec 
-             << src.code[i].label << "\t"
-             << src.code[i].ins << "\t"
-             << src.code[i].value << "\t";
-        printf("%06x\n",object[i]);
-    }
-    */
      
     return 0;
 }
